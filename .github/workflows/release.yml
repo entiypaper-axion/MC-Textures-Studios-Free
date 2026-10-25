@@ -1,0 +1,30 @@
+name: Publish release
+
+# A push to the release-files branch publishes every folder <tag>/ that has a NOTES.md
+# and no GitHub Release yet. The tag is created on main; NOTES.md is the release text,
+# TITLE.txt (optional) the title; every other file in the folder is attached.
+on:
+  push:
+    branches: [release-files]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Create missing releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for dir in v*/; do
+            tag="${dir%/}"
+            [ -f "$tag/NOTES.md" ] || continue
+            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then echo "exists: $tag"; continue; fi
+            title="MCTS Free ${tag#v}"; [ -f "$tag/TITLE.txt" ] && title="$(cat "$tag/TITLE.txt")"
+            files=$(ls "$tag"/* | grep -v -E '/(NOTES\.md|TITLE\.txt)$')
+            gh release create "$tag" $files --repo "$GITHUB_REPOSITORY" --target main --title "$title" --notes-file "$tag/NOTES.md"
+            echo "published: $tag"
+          done
